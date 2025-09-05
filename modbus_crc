@@ -20,6 +20,7 @@ except ImportError:
     _MP = False
     _HAS_NATIVE = False
 
+
 # fmt: off
 # CRC16 Modbus table (polynomial 0xA001)
 _T = (
@@ -59,19 +60,23 @@ _T = (
 # fmt: on
 
 if _MP and _HAS_NATIVE:
-    # Use native emitter for best ESP32 performance (2.5x faster)
+    # Use native emitter for best ESP32 performance
     import array
 
     _TABLE = array.array("H", _T)
-
 
     @micropython.native
     def crc16(data):
         """Calculate Modbus CRC16. Returns 2-byte CRC (little-endian)."""
         crc = 0xFFFF
         table = _TABLE
-        for byte in data:
-            crc = (crc >> 8) ^ table[(crc ^ byte) & 0xFF]
+        data_len = len(data)
+        
+        # Index-based loop is faster in native mode than iterator
+        # Avoids Python object iteration overhead
+        for i in range(data_len):
+            crc = (crc >> 8) ^ table[(crc ^ data[i]) & 0xFF]
+        
         return bytes([crc & 0xFF, crc >> 8])
 elif _MP:
     # MicroPython without native decorator
@@ -88,6 +93,7 @@ elif _MP:
             crc = (crc >> 8) ^ table[(crc ^ byte) & 0xFF]
         return bytes([crc & 0xFF, crc >> 8])
 else:
+    # CPython implementation - keep simple for optimal performance
 
     def crc16(data):
         """Calculate Modbus CRC16. Returns 2-byte CRC (little-endian)."""
