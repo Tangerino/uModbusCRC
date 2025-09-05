@@ -9,18 +9,9 @@ import sys
 
 try:
     import utime as time
-    IS_MICROPYTHON = True
 except ImportError:
     import time
-    IS_MICROPYTHON = False
 
-try:
-    from machine import freq
-    ESP32 = True
-except ImportError:
-    ESP32 = False
-
-# Import the modbus_crc module (may have @micropython.native optimization)
 import modbus_crc
 
 
@@ -81,13 +72,15 @@ def format_time(microseconds):
 
 def benchmark(func, data, iterations=1000):
     """Run benchmark and return time per operation in microseconds"""
-    if IS_MICROPYTHON:
+    try:
+        # Try MicroPython timing first
         gc.collect()
         start = time.ticks_us()
         for _ in range(iterations):
             _ = func(data)
         elapsed = time.ticks_diff(time.ticks_us(), start)
-    else:
+    except AttributeError:
+        # Fall back to standard Python timing
         start = time.perf_counter()
         for _ in range(iterations):
             _ = func(data)
@@ -103,28 +96,21 @@ def main():
     print("=" * 80)
     
     # System info
-    if ESP32:
+    try:
+        from machine import freq
+        print(f"Platform: ESP32 @ {freq()/1000000:.0f} MHz")
+    except ImportError:
         try:
-            print(f"Platform: ESP32 @ {freq()/1000000:.0f} MHz")
-        except:
-            print("Platform: ESP32")
-    elif IS_MICROPYTHON:
-        print("Platform: MicroPython")
-    else:
-        print(f"Platform: CPython {sys.version.split()[0]}")
+            import utime
+            print("Platform: MicroPython")
+        except ImportError:
+            print(f"Platform: CPython {sys.version.split()[0]}")
     
-    if IS_MICROPYTHON:
+    try:
         gc.collect()
         print(f"Free Memory: {gc.mem_free():,} bytes")
-    
-    # Check which implementation modbus_crc is using
-    if hasattr(modbus_crc, '_HAS_NATIVE') and hasattr(modbus_crc, '_MP'):
-        if modbus_crc._MP and modbus_crc._HAS_NATIVE:
-            print("modbus_crc module: Using @micropython.native optimization ✓")
-        elif modbus_crc._MP:
-            print("modbus_crc module: MicroPython without native")
-        else:
-            print("modbus_crc module: CPython implementation")
+    except AttributeError:
+        pass
     
     print("-" * 80)
     
@@ -147,9 +133,7 @@ def main():
         (8, "8 bytes"),
         (32, "32 bytes"),
         (64, "64 bytes"),
-        (256, "256 bytes"),
-        (512, "512 bytes"),
-        (1024, "1 KB"),
+        (256, "256 bytes")
     ]
     
     print("=" * 80)
@@ -207,10 +191,14 @@ def main():
     print("\n" + "=" * 80)
     print("Benchmark completed!")
     
-    if IS_MICROPYTHON and speedup > 1.5:
-        print("\n✓ Native optimization is working! Significant speedup detected.")
-    elif IS_MICROPYTHON:
-        print("\n⚠ Native optimization may not be active. Check modbus_crc._HAS_NATIVE")
+    # Final analysis based on overall throughput
+    final_speedup = throughput1 / throughput2
+    if final_speedup > 2.0:
+        print("\n✓ Excellent performance! modbus_crc is significantly faster.")
+    elif final_speedup > 1.0:
+        print(f"\n✓ Good performance (speedup: {final_speedup:.2f}x)")
+    else:
+        print(f"\n⚠ modbus_crc performance needs improvement ({final_speedup:.2f}x)")
 
 
 if __name__ == "__main__":
