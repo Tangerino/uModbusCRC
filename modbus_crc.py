@@ -4,22 +4,8 @@ try:
     import micropython
 
     _MP = True
-    # Check if native decorator is available
-    try:
-
-        @micropython.native
-        def _test():
-            return 0
-
-
-        _HAS_NATIVE = True
-    except Exception as e:
-        print(f"Warning: micropython.native decorator not available: {e}")
-        _HAS_NATIVE = False
 except ImportError:
     _MP = False
-    _HAS_NATIVE = False
-
 
 # fmt: off
 # CRC16 Modbus table (polynomial 0xA001)
@@ -59,42 +45,26 @@ _T = (
 )
 # fmt: on
 
-if _MP and _HAS_NATIVE:
-    # Use native emitter for best ESP32 performance
+if _MP:
     import array
 
     _TABLE = array.array("H", _T)
 
-    @micropython.native
-    def crc16(data):
-        """Calculate Modbus CRC16. Returns 2-byte CRC (little-endian)."""
+
+    @micropython.viper
+    def crc16(data) -> object:
+        """Viper CRC - fast for medium-sized frames (32-128 bytes)"""
         crc = 0xFFFF
-        table = _TABLE
-        data_len = len(data)
-        
-        # Index-based loop is faster in native mode than iterator
-        # Avoids Python object iteration overhead
+        table = ptr16(_TABLE)
+        data_ptr = ptr8(data)
+        data_len = int(len(data))
+
         for i in range(data_len):
-            crc = (crc >> 8) ^ table[(crc ^ data[i]) & 0xFF]
-        
+            crc = (crc >> 8) ^ table[(crc ^ data_ptr[i]) & 0xFF]
+
         return bytes([crc & 0xFF, crc >> 8])
-elif _MP:
-    # MicroPython without native decorator
-    import array
 
-    _TABLE = array.array("H", _T)
-
-
-    def crc16(data):
-        """Calculate Modbus CRC16. Returns 2-byte CRC (little-endian)."""
-        crc = 0xFFFF
-        table = _TABLE
-        for byte in data:
-            crc = (crc >> 8) ^ table[(crc ^ byte) & 0xFF]
-        return bytes([crc & 0xFF, crc >> 8])
 else:
-    # CPython implementation - keep simple for optimal performance
-
     def crc16(data):
         """Calculate Modbus CRC16. Returns 2-byte CRC (little-endian)."""
         crc = 0xFFFF
