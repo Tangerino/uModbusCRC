@@ -1,5 +1,4 @@
 """Lightweight Modbus CRC16 calculation - Fast & Simple"""
-from util import ticks_ms
 
 try:
     import micropython
@@ -20,8 +19,6 @@ try:
 except ImportError:
     _MP = False
     _HAS_NATIVE = False
-
-print(f"[MAIN] {ticks_ms()} {__name__} - Starting up")
 
 # fmt: off
 # CRC16 Modbus table (polynomial 0xA001)
